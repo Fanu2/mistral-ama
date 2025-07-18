@@ -1,40 +1,33 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { IncomingForm, File } from 'formidable';
+import { IncomingForm, Fields, Files } from 'formidable';
 import fs from 'fs';
 
 export const config = {
   api: {
-    bodyParser: false, // important: disable Next.js built-in body parser for formidable
+    bodyParser: false,
   },
 };
 
-type Fields = {
-  [key: string]: any;
-};
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  const form = new IncomingForm();
 
-type Files = {
-  [key: string]: File | File[];
-};
+  form.parse(
+    req,
+    async (err: any, fields: Fields, files: Files) => {
+      if (err) {
+        console.error('Form parsing error:', err);
+        res.status(500).json({ error: 'Form parsing error' });
+        return;
+      }
 
-function parseForm(req: NextApiRequest): Promise<{ fields: Fields; files: Files }> {
-  return new Promise((resolve, reject) => {
-    const form = new IncomingForm();
-    form.parse(req, (err: Error | null, fields: Fields, files: Files) => {
-      if (err) reject(err);
-      else resolve({ fields, files });
-    });
-  });
-}
+      // Your existing logic here, e.g.:
+      // const question = fields.question as string;
+      // do something with the question and files...
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  try {
-    const { fields, files } = await parseForm(req);
-
-    // your logic here with fields and files
-
-    res.status(200).json({ success: true, fields, files });
-  } catch (error) {
-    console.error('Form parsing error:', error);
-    res.status(500).json({ error: 'Form parsing error' });
-  }
+      res.status(200).json({ message: 'Form parsed successfully' });
+    }
+  );
 }
