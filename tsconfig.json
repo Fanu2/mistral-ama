@@ -26,8 +26,8 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    "formidable.d.ts",      // explicitly include manual declaration file
-    ".next/types/**/*.ts"
+    ".next/types/**/*.ts",
+    "formidable.d.ts"            // <-- Add this line if your file is at root
   ],
   "exclude": ["node_modules"]
 }
