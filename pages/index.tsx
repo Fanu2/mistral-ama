@@ -1,21 +1,34 @@
 // pages/index.tsx
-import { useState } from 'react';
+import { useState, ChangeEvent } from 'react';
 import Head from 'next/head';
+
+interface HistoryItem {
+  q: string;
+  a: string;
+}
 
 export default function Home() {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [loading, setLoading] = useState(false);
-  const [history, setHistory] = useState<{ q: string; a: string }[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [file, setFile] = useState<File | null>(null);
 
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setFile(e.target.files?.[0] || null);
+  };
+
   const askMistral = async () => {
+    if (!question.trim()) return;
+
     setLoading(true);
     setAnswer('');
 
     const formData = new FormData();
     formData.append('question', question);
-    if (file) formData.append('file', file);
+    if (file) {
+      formData.append('file', file);
+    }
 
     try {
       const res = await fetch('/api/ask', {
@@ -26,18 +39,17 @@ export default function Home() {
       if (!res.ok) {
         const text = await res.text();
         setAnswer(`Error: ${text}`);
-        setLoading(false);
-        return;
+      } else {
+        const data = await res.json();
+        setAnswer(data.reply);
+        setHistory((prev) => [...prev, { q: question, a: data.reply }]);
       }
-
-      const data = await res.json();
-      setAnswer(data.reply);
-      setHistory((prev) => [...prev, { q: question, a: data.reply }]);
     } catch (error) {
+      console.error(error);
       setAnswer('Something went wrong.');
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (
@@ -56,7 +68,7 @@ export default function Home() {
         />
         <input
           type="file"
-          onChange={(e) => setFile(e.target.files?.[0] || null)}
+          onChange={handleFileChange}
           className="mb-4 text-white"
         />
         <button

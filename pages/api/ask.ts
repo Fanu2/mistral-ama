@@ -1,38 +1,39 @@
-import { NextApiRequest, NextApiResponse } from 'next';
-import formidable from 'formidable';
-
-// Define your own File type to avoid type errors
-type File = {
-  filepath: string;
-  originalFilename?: string;
-  mimetype?: string;
-  // add any other fields if you need
-};
+import type { NextApiRequest, NextApiResponse } from 'next';
+import formidable, { IncomingForm, File as FormidableFile } from 'formidable';
 
 type Fields = { [key: string]: string | string[] };
-type Files = { [key: string]: File | File[] };
+type Files = { [key: string]: FormidableFile | FormidableFile[] };
 
-// Disable Next.js built-in body parser for this route
 export const config = {
   api: {
-    bodyParser: false,
+    bodyParser: false, // Disables Next.js default body parser so formidable can handle it
   },
 };
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  const form = new formidable.IncomingForm();
+  const form = new IncomingForm();
 
-  form.parse(req, (err, fields: Fields, files: Files) => {
+  form.parse(req, (err: any, fields: Fields, files: Files) => {
     if (err) {
       console.error('Form parsing error:', err);
       return res.status(500).json({ error: 'Form parsing error' });
     }
 
-    // Now you can access form fields and files safely
-    console.log('Fields:', fields);
-    console.log('Files:', files);
+    const question = fields.question;
+    // Here, you could access uploaded file(s) from files if needed
 
-    // Example response:
-    res.status(200).json({ message: 'Form received', fields, files });
+    // For example: const uploadedFile = files.file;
+
+    // TODO: Process the question and files with your Mistral model logic here
+    // For demo, just send back the question:
+
+    if (typeof question !== 'string') {
+      return res.status(400).json({ error: 'Question must be a string' });
+    }
+
+    // Replace this with your actual AI logic call
+    const reply = `You asked: ${question}`;
+
+    res.status(200).json({ reply });
   });
 }
