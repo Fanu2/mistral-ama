@@ -1,31 +1,41 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import formidable from "formidable";
-import fs from "fs";
+import fs from "fs/promises";
 
-// Disable default body parser
+// Disable default body parser for file uploads
 export const config = {
   api: {
     bodyParser: false,
   },
 };
 
+// Define minimal interface for files returned by formidable
+interface FormidableFile {
+  filepath: string;
+  originalFilename?: string;
+  mimetype?: string;
+  size?: number;
+}
+
 type ParsedForm = {
   fields: Record<string, string>;
-  files: Record<string, formidable.File | formidable.File[]>;
+  files: Record<string, FormidableFile | FormidableFile[]>;
 };
 
 async function parseForm(req: NextApiRequest): Promise<ParsedForm> {
   const form = formidable({ multiples: false });
-
   return new Promise((resolve, reject) => {
     form.parse(req, (err, fields, files) => {
       if (err) return reject(err);
-      resolve({ fields, files });
+      resolve({ fields: fields as Record<string, string>, files: files as Record<string, FormidableFile | FormidableFile[]> });
     });
   });
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -42,10 +52,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let fileContent = "";
 
     if (file && "filepath" in file) {
-      fileContent = fs.readFileSync(file.filepath, "utf8");
+      fileContent = await fs.readFile(file.filepath, "utf8");
     }
 
-    const fakeAnswer = `Echo: ${question}${fileContent ? ` | File: ${fileContent.slice(0, 100)}...` : ""}`;
+    const fakeAnswer = `Echo: ${question}${
+      fileContent ? ` | File: ${fileContent.slice(0, 100)}...` : ""
+    }`;
 
     res.status(200).json({ reply: fakeAnswer });
   } catch (error) {
