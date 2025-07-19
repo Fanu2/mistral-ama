@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { IncomingForm } from 'formidable';
-import type { Fields, Files } from 'formidable';
 import fs from 'fs';
 
 export const config = {
@@ -8,6 +7,15 @@ export const config = {
     bodyParser: false,
   },
 };
+
+type Fields = Record<string, string | string[]>;
+type Files = Record<
+  string,
+  {
+    filepath: string;
+    [key: string]: any;
+  }
+>;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const form = new IncomingForm();
