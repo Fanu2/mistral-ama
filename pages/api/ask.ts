@@ -1,41 +1,38 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
+import { NextApiRequest, NextApiResponse } from 'next';
 import formidable from 'formidable';
 
-type Fields = { [key: string]: string | string[] };
-type Files = { [key: string]: formidable.File | formidable.File[] };
+// Define your own File type to avoid type errors
+type File = {
+  filepath: string;
+  originalFilename?: string;
+  mimetype?: string;
+  // add any other fields if you need
+};
 
+type Fields = { [key: string]: string | string[] };
+type Files = { [key: string]: File | File[] };
+
+// Disable Next.js built-in body parser for this route
 export const config = {
   api: {
     bodyParser: false,
   },
 };
 
-export default function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
+export default function handler(req: NextApiRequest, res: NextApiResponse) {
   const form = new formidable.IncomingForm();
 
-  form.parse(req, (err, fields: Fields, _files: Files) => {
+  form.parse(req, (err, fields: Fields, files: Files) => {
     if (err) {
       console.error('Form parsing error:', err);
       return res.status(500).json({ error: 'Form parsing error' });
     }
 
-    const question = fields.question;
-    const questionText = Array.isArray(question) ? question[0] : question || '';
+    // Now you can access form fields and files safely
+    console.log('Fields:', fields);
+    console.log('Files:', files);
 
-    if (!questionText) {
-      return res.status(400).json({ error: 'No question provided' });
-    }
-
-    const answer = `You asked: ${questionText}`;
-
-    return res.status(200).json({ answer });
+    // Example response:
+    res.status(200).json({ message: 'Form received', fields, files });
   });
 }
