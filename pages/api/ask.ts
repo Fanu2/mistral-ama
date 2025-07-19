@@ -1,16 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { IncomingForm, type Fields, type Files, type File } from 'formidable';
-import fs from 'fs';
-import path from 'path';
+import { IncomingForm } from 'formidable';
+import type { Fields, Files } from 'formidable';
 
-// Disable Next.js default body parser
+// Disable Next.js default body parsing
 export const config = {
   api: {
     bodyParser: false,
   },
 };
 
-// API route handler
 const handler = (req: NextApiRequest, res: NextApiResponse) => {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
@@ -19,7 +17,6 @@ const handler = (req: NextApiRequest, res: NextApiResponse) => {
 
   const form = new IncomingForm();
 
-  // Parse form data
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   form.parse(req, async (err: Error | null, fields: Fields, _files: Files) => {
     if (err) {
@@ -37,10 +34,7 @@ const handler = (req: NextApiRequest, res: NextApiResponse) => {
     }
 
     try {
-      // Log received content
       console.log('Received content:', contentToSend);
-
-      // Placeholder response logic
       res.status(200).json({ answer: `You said: ${contentToSend}` });
     } catch (processingError) {
       console.error('Processing error:', processingError);
