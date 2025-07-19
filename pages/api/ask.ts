@@ -1,70 +1,57 @@
-import type { NextApiRequest, NextApiResponse } from "next";
-import formidable from "formidable";
-import fs from "fs";
+import type { NextApiRequest, NextApiResponse } from 'next';
+import formidable from 'formidable';
 
-interface WriteStreamWithPath extends NodeJS.WritableStream {
-  path: string;
-}
-
-export const config = {
-  api: {
-    bodyParser: false,
-  },
+type Fields = Record<string, string | string[]>;
+type FileType = {
+  filepath: string;
+  originalFilename?: string;
+  mimetype?: string;
+  size: number;
+  // add any other properties your app expects
 };
+type Files = Record<string, FileType | FileType[]> | null;
 
-function parseForm(req: NextApiRequest) {
+function parseForm(req: NextApiRequest): Promise<{ fields: Fields; files: Files }> {
   const form = formidable({ multiples: false, keepExtensions: true });
-  return new Promise<{ fields: formidable.Fields; files: formidable.Files }>((resolve, reject) => {
-    form.parse(req, (_err, fields, files) => {
-      if (_err) reject(_err);
+  return new Promise((resolve, reject) => {
+    form.parse(req, (err, fields, files) => {
+      if (err) reject(err);
       else resolve({ fields, files });
     });
   });
 }
 
+// Example usage in your API handler
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+  if (req.method !== 'POST') {
+    res.status(405).end();
+    return;
   }
-
-  let fileContent = "";
 
   try {
-    const { fields, files: parsedFiles } = await parseForm(req);
+    const { fields, files } = await parseForm(req);
 
-    // files can be null so guard it
-    const files = parsedFiles ?? null;
-
-    if (!files || !files.file) {
-      return res.status(400).json({ error: "No file uploaded" });
+    // Access file safely
+    let file: FileType | undefined;
+    if (files && files.file) {
+      if (Array.isArray(files.file)) {
+        file = files.file[0];
+      } else {
+        file = files.file;
+      }
     }
 
-    const file = Array.isArray(files.file) ? files.file[0] : files.file;
+    // Your logic with fields and file here
 
-    // Accessing the underlying file path of the uploaded file
-    const streamPath = (file._writeStream as WriteStreamWithPath).path;
-
-    const stats = await fs.promises.stat(streamPath);
-
-    if (stats.size > 1024 * 1024) {
-      return res.status(400).json({ error: "File size exceeds 1MB limit" });
-    }
-
-    fileContent = await fs.promises.readFile(streamPath, "utf8");
-
-    const question = fields.question as string | undefined;
-
-    if (!question) {
-      return res.status(400).json({ error: "No question provided" });
-    }
-
-    const prompt = `${question}${fileContent ? `\n\nFile content:\n${fileContent}` : ""}`;
-
-    // ... rest of your processing logic with prompt
-
-    return res.status(200).json({ prompt });
+    res.status(200).json({ fields, file });
   } catch (error) {
-    console.error("Error in API handler:", error);
-    return res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({ error: 'Error parsing form data' });
   }
 }
+
+// Disable the default bodyParser to use formidable
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
