@@ -4,13 +4,14 @@ import fs from "fs/promises";
 
 export const config = {
   api: {
-    bodyParser: false, // disable Next.js default body parsing to use formidable
+    bodyParser: false,
   },
 };
 
+// Define ParsedForm with files typed as Record<string, any>
 type ParsedForm = {
   fields: Record<string, string>;
-  files: Record<string, formidable.File | formidable.File[]>;
+  files: Record<string, any>;  // <---- changed here, no formidable.File type
 };
 
 async function parseForm(req: NextApiRequest): Promise<ParsedForm> {
@@ -40,17 +41,14 @@ export default async function handler(
       return res.status(400).json({ error: "Question is required" });
     }
 
-    // Extract file, handle single or array of files (though multiples: false)
     const file = Array.isArray(files.file) ? files.file[0] : files.file;
 
     let fileContent = "";
 
-    if (file && "filepath" in file) {
-      // Read file content as utf8 string (be careful with large files in prod)
+    if (file && file.filepath) {
       fileContent = await fs.readFile(file.filepath, "utf8");
     }
 
-    // Fake answer echoes question and first 100 chars of file content if any
     const truncated = fileContent.length > 100;
     const reply = `Echo: ${question.trim()}${
       fileContent ? ` | File: ${fileContent.slice(0, 100)}` : ""
