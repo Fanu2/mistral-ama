@@ -1,42 +1,46 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import formidable, { IncomingForm } from 'formidable';
+import { IncomingForm, File as FormidableFile } from 'formidable';
 
 type Fields = { [key: string]: string | string[] };
-type Files = { [key: string]: any };
+type Files = { [key: string]: FormidableFile | FormidableFile[] };
 
 export const config = {
   api: {
-    bodyParser: false, // disable default body parser to handle formidable manually
+    bodyParser: false, // disable default body parsing so formidable can handle multipart
   },
 };
 
-export default async function handler(
+export default function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
   const form = new IncomingForm();
 
-  form.parse(req, async (err: Error | null, fields: Fields, _files: Files) => {
+  form.parse(req, (err: Error | null, fields: Fields, _files: Files) => {
     if (err) {
       console.error('Form parsing error:', err);
-      res.status(500).json({ error: 'Form parsing error' });
-      return;
+      return res.status(500).json({ error: 'Form parsing error' });
     }
 
-    // Example: retrieve question field (adjust to your actual field names)
-    const question = Array.isArray(fields.question)
-      ? fields.question[0]
-      : fields.question || '';
+    const question = fields.question;
 
-    try {
-      // Your existing logic here — e.g., process question, call OpenAI, etc.
-      // For example:
-      const answer = `You asked: ${question}`;
+    // Handle question possibly being array or undefined
+    const questionText = Array.isArray(question)
+      ? question[0]
+      : question || '';
 
-      res.status(200).json({ answer });
-    } catch (error) {
-      console.error('API handler error:', error);
-      res.status(500).json({ error: 'Internal server error' });
+    if (!questionText) {
+      return res.status(400).json({ error: 'No question provided' });
     }
+
+    // Simulate processing the question and generating an answer
+    const answer = `You asked: ${questionText}`;
+
+    return res.status(200).json({ answer });
   });
 }
