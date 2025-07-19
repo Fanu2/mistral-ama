@@ -1,12 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import formidable from 'formidable';
+import formidable, { File as FormidableFile } from 'formidable';
 
 type Fields = { [key: string]: string | string[] };
-type Files = { [key: string]: formidable.File | formidable.File[] };
+type Files = { [key: string]: FormidableFile | FormidableFile[] };
 
 export const config = {
   api: {
-    bodyParser: false, // disable Next.js default body parsing for formidable
+    bodyParser: false,
   },
 };
 
@@ -25,8 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const { fields, files } = await parseForm(req);
     res.status(200).json({ success: true, fields, files });
-  } catch (_error) {
-    // prefix _error to avoid unused variable warning
+  } catch {
     res.status(500).json({ success: false, error: 'Failed to parse form data' });
   }
 }
