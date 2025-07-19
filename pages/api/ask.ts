@@ -1,7 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { IncomingForm, Fields, Files } from 'formidable';
-import fs from 'fs';
-import path from 'path';
+import { IncomingForm } from 'formidable';
+import type { Fields, Files } from 'formidable';
 
 export const config = {
   api: {
@@ -17,7 +16,7 @@ const handler = (req: NextApiRequest, res: NextApiResponse) => {
 
   const form = new IncomingForm();
 
-  form.parse(req, async (err: Error | null, fields: Fields, files: Files) => {
+  form.parse(req, async (err: Error | null, fields: Fields, _files: Files) => {
     if (err) {
       console.error('Form parsing error:', err);
       res.status(500).json({ error: 'Form parsing error' });
@@ -33,10 +32,8 @@ const handler = (req: NextApiRequest, res: NextApiResponse) => {
     }
 
     try {
-      // Log the received content (for development/debugging)
       console.log('Received content:', contentToSend);
 
-      // Respond with dummy answer or call external API here
       res.status(200).json({ answer: `You said: ${contentToSend}` });
     } catch (processingError: unknown) {
       console.error('Processing error:', processingError);
