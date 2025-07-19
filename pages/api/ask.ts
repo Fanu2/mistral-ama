@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { IncomingForm, Files } from 'formidable';
+import { IncomingForm, Fields, Files } from 'formidable';
 import fs from 'fs';
 
 export const config = {
@@ -8,13 +8,10 @@ export const config = {
   },
 };
 
-type Fields = { [key: string]: string | string[] | undefined };
-type FileLike = { filepath: string };
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const form = new IncomingForm();
 
-  form.parse(req, async (err: any, fields: Fields, files: Files) => {
+  form.parse(req, async (err: Error | null, fields: Fields, files: Files) => {
     if (err) {
       console.error('Form parsing error:', err);
       res.status(500).json({ error: 'Form parsing error' });
@@ -22,19 +19,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-      // Safely extract question as string
-      let question = fields.question;
-      if (Array.isArray(question)) question = question[0];
-      if (typeof question !== 'string') question = '';
+      // Ensure question is a string, not an array
+      const question = Array.isArray(fields.question) ? fields.question[0] : fields.question || '';
 
-      // Read file content if a single file uploaded
+      // Read file content if uploaded
       let fileContent = '';
       if (files.file && !Array.isArray(files.file)) {
-        const uploadedFile = files.file as FileLike;
+        const uploadedFile = files.file;
         fileContent = fs.readFileSync(uploadedFile.filepath, 'utf-8');
       }
 
-      // Compose prompt content
+      // Construct prompt content
       const contentToSend = fileContent
         ? `${question}\n\nAttached content:\n${fileContent}`
         : question;
@@ -45,7 +40,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const mistralRes = await fetch('https://api.mistral.ai/v1/chat/completions', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${process.env.MISTRAL_API_KEY}`,
+          'Authorization': `Bearer ${process.env.MISTRAL_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -63,7 +58,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!mistralRes.ok) {
         const errorData = await mistralRes.json().catch(() => null);
         console.error('Mistral API error:', errorData || mistralRes.statusText);
-        return res.status(500).json({ error: `Mistral API error: ${JSON.stringify(errorData)}` });
+        res.status(500).json({ error: `Mistral API error: ${JSON.stringify(errorData)}` });
+        return;
       }
 
       const result = await mistralRes.json();
