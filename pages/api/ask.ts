@@ -33,12 +33,12 @@ const handler = (req: NextApiRequest, res: NextApiResponse) => {
     }
 
     try {
-      // You can add your logic here. Example:
+      // Log the received content (for development/debugging)
       console.log('Received content:', contentToSend);
 
-      // Respond back with a dummy response or integrate your model/API call
+      // Respond with dummy answer or call external API here
       res.status(200).json({ answer: `You said: ${contentToSend}` });
-    } catch (processingError) {
+    } catch (processingError: unknown) {
       console.error('Processing error:', processingError);
       res.status(500).json({ error: 'Internal server error' });
     }
