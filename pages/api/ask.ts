@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { promises as fs } from 'fs';
-import { parseForm } from '../../utils/parseForm';
+import { parseForm } from '../../utils/parseForm'; // Ensure this exists and works
 import type { File } from 'formidable';
 
 interface MistralResponse {
@@ -21,10 +21,10 @@ async function callMistralAPI(prompt: string): Promise<string> {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "mistral-tiny",
+      model: "mistral-tiny", // or mistral-small / mistral-medium based on your plan
       messages: [{ role: "user", content: prompt }],
       temperature: 0.7,
       max_tokens: 2000,
@@ -46,7 +46,7 @@ export default async function handler(
   res: NextApiResponse<{ reply?: string; error?: string }>
 ) {
   if (req.method !== "POST") {
-    res.setHeader('Allow', ['POST']);
+    res.setHeader("Allow", ["POST"]);
     return res.status(405).json({ error: "Method Not Allowed" });
   }
 
@@ -81,7 +81,8 @@ export default async function handler(
     return res.status(200).json({ reply: aiResponse });
   } catch (error: unknown) {
     console.error("API error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Internal server error";
+    const errorMessage =
+      error instanceof Error ? error.message : "Internal server error";
     return res.status(500).json({ error: errorMessage });
   } finally {
     if (files?.file) {
