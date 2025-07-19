@@ -1,8 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import formidable, { File as FormidableFile } from 'formidable';
+import formidable from 'formidable';
+import type { File } from 'formidable';
 
 type Fields = { [key: string]: string | string[] };
-type Files = { [key: string]: FormidableFile | FormidableFile[] };
+type Files = { [key: string]: File | File[] };
 
 export const config = {
   api: {
@@ -14,9 +15,9 @@ function parseForm(req: NextApiRequest): Promise<{ fields: Fields; files: Files 
   const form = formidable({ multiples: false, keepExtensions: true });
 
   return new Promise((resolve, reject) => {
-    form.parse(req, (err: Error | null, fields: Fields, files: Files) => {
+    form.parse(req, (err, fields, files) => {
       if (err) reject(err);
-      else resolve({ fields, files });
+      else resolve({ fields, files: files as Files });
     });
   });
 }
