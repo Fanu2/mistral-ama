@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { IncomingForm, Fields, Files } from 'formidable';
+import { IncomingForm } from 'formidable';
 import fs from 'fs';
 
 export const config = {
@@ -11,7 +11,7 @@ export const config = {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const form = new IncomingForm();
 
-  form.parse(req, async (err: Error | null, fields: Fields, files: Files) => {
+  form.parse(req, async (err: Error | null, fields: any, files: any) => {
     if (err) {
       console.error('Form parsing error:', err);
       res.status(500).json({ error: 'Form parsing error' });
