@@ -1,6 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { promises as fs } from 'fs';
-import { parseForm, ParsedForm } from '../../utils/parseForm';
+import { parseForm } from '../../utils/parseForm';
+import type { File } from 'formidable';
+
+interface MistralResponse {
+  choices?: Array<{
+    message?: {
+      content?: string;
+    };
+  }>;
+}
 
 async function callMistralAPI(prompt: string): Promise<string> {
   const apiKey = process.env.MISTRAL_API_KEY;
@@ -28,75 +37,61 @@ async function callMistralAPI(prompt: string): Promise<string> {
     throw new Error(`Mistral API error: ${response.status} - ${errorText}`);
   }
 
-  const data = await response.json();
+  const data: MistralResponse = await response.json();
   return data.choices?.[0]?.message?.content || "No response from Mistral";
 }
 
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse
+  res: NextApiResponse<{ reply?: string; error?: string }>
 ) {
   if (req.method !== "POST") {
     res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: "Method Not Allowed" });
   }
 
-  let files: ParsedForm["files"] | null = null;
+  let files: { file?: File | File[] } | null = null;
 
   try {
-    // Parse multipart form data
     const { fields, files: parsedFiles } = await parseForm(req);
     files = parsedFiles;
 
-    // Extract question from form fields
     const question = Array.isArray(fields.question)
       ? fields.question[0]
       : fields.question;
 
-    // Validate question
     if (!question || typeof question !== "string" || question.length > 1000) {
       return res.status(400).json({
         error: "Question is required, must be a string, and cannot exceed 1000 characters",
       });
     }
 
-    // Process uploaded file if exists
-    let fileContent = "";
     const file = Array.isArray(files.file) ? files.file[0] : files.file;
+    let fileContent = "";
 
     if (file && file.size > 0) {
-      // Validate file size (1MB limit)
       if (file.size > 1024 * 1024) {
         return res.status(400).json({ error: "File size exceeds 1MB limit" });
       }
-
-      // Read file content
       fileContent = await fs.readFile(file.filepath, "utf8");
     }
 
-    // Create prompt combining question and file content
     const prompt = `${question}${fileContent ? `\n\nFile content:\n${fileContent}` : ""}`;
-
-    // Call Mistral API with the prompt
     const aiResponse = await callMistralAPI(prompt);
-
-    // Return successful response
     return res.status(200).json({ reply: aiResponse });
-  } catch (error) {
-    // Handle errors
+  } catch (error: unknown) {
     console.error("API error:", error);
     const errorMessage = error instanceof Error ? error.message : "Internal server error";
     return res.status(500).json({ error: errorMessage });
   } finally {
-    // Clean up uploaded files
-    if (files) {
-      const fileToClean = Array.isArray(files.file) ? files.file : [files.file].filter(Boolean);
+    if (files?.file) {
+      const fileArray = Array.isArray(files.file) ? files.file : [files.file];
       await Promise.all(
-        fileToClean.map(async (f) => {
-          if (f?.filepath) {
+        fileArray.map(async (f: File) => {
+          if (f.filepath) {
             try {
               await fs.unlink(f.filepath);
-            console.log(`Cleaned up file: ${f.filepath}`);
+              console.log(`Cleaned up file: ${f.filepath}`);
             } catch (cleanupError) {
               console.error("File cleanup error:", cleanupError);
             }
@@ -109,6 +104,6 @@ export default async function handler(
 
 export const config = {
   api: {
-    bodyParser: false, // Disable default body parser to handle multipart/form-data
+    bodyParser: false,
   },
 };
