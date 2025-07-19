@@ -1,12 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { IncomingForm } from 'formidable';
-import type { Fields, Files } from 'formidable';
 
 export const config = {
   api: {
     bodyParser: false,
   },
 };
+
+// Define fallback types for fields and files
+type FormidableFields = { [key: string]: string | string[] };
+type FormidableFiles = { [key: string]: any }; // Adjust if needed
 
 const handler = (req: NextApiRequest, res: NextApiResponse) => {
   if (req.method !== 'POST') {
@@ -16,7 +19,7 @@ const handler = (req: NextApiRequest, res: NextApiResponse) => {
 
   const form = new IncomingForm();
 
-  form.parse(req, async (err: Error | null, fields: Fields, _files: Files) => {
+  form.parse(req, async (err: Error | null, fields: FormidableFields, _files: FormidableFiles) => {
     if (err) {
       console.error('Form parsing error:', err);
       res.status(500).json({ error: 'Form parsing error' });
