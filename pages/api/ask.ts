@@ -1,52 +1,31 @@
-import type { NextApiRequest, NextApiResponse } from "next";
-import formidable from "formidable";
-import fs from "fs/promises";
+async function callMistralAPI(prompt: string): Promise<string> {
+  const apiKey = process.env.MISTRAL_API_KEY;
+  if (!apiKey) {
+    throw new Error("Missing MISTRAL_API_KEY in environment variables");
+  }
 
-// Disable default body parser for file uploads
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
-// Define interface for formidable file
-interface FormidableFile {
-  filepath: string;
-  originalFilename?: string | null;
-  mimetype?: string | null;
-  size: number;
-}
-
-interface ParsedForm {
-  fields: Record<string, string | string[]>;
-  files: Record<string, FormidableFile | FormidableFile[]>;
-}
-
-async function parseForm(req: NextApiRequest): Promise<ParsedForm> {
-  const form = formidable({
-    multiples: true,
-    keepExtensions: true,
-    maxFileSize: 5 * 1024 * 1024, // 5MB limit
-    filter: ({ mimetype }: { mimetype: string | null }) => {
-      return !!mimetype && ["text/plain", "application/pdf"].includes(mimetype);
+  const response = await fetch("https://api.mistral.ai/v1/generate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
     },
+    body: JSON.stringify({
+      // Adjust the payload as per Mistral API specs
+      prompt,
+      // Add other params like model, max_tokens, temperature etc if required
+    }),
   });
 
-  return new Promise((resolve, reject) => {
-    form.parse(
-      req,
-      (
-        err: Error | null,
-        fields: Record<string, string | string[]>,
-        files: Record<string, FormidableFile | FormidableFile[]>
-      ) => {
-        if (err) {
-          return reject(err);
-        }
-        resolve({ fields, files });
-      }
-    );
-  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Mistral API error: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+
+  // Adjust according to the actual response format
+  return data.generated_text || "No response from Mistral";
 }
 
 export default async function handler(
@@ -58,9 +37,10 @@ export default async function handler(
   }
 
   let files: ParsedForm["files"] | null = null;
+
   try {
     const { fields, files: parsedFiles } = await parseForm(req);
-    files = parsedFiles; // Store for cleanup
+    files = parsedFiles;
 
     const question = Array.isArray(fields.question)
       ? fields.question[0]
@@ -76,29 +56,24 @@ export default async function handler(
     let fileContent = "";
 
     if (file && file.size > 0) {
-      try {
-        fileContent = await fs.readFile(file.filepath, "utf8");
-      } catch (readError) {
-        console.error("File read error:", readError);
-        return res.status(400).json({ error: "Failed to read uploaded file" });
-      }
+      fileContent = await fs.readFile(file.filepath, "utf8");
     }
 
-    const response = {
-      reply: `Echo: ${question}${fileContent ? ` | File: ${fileContent.slice(0, 100)}` : ""}`,
-      truncated: fileContent ? fileContent.length > 100 : false,
-    };
+    const prompt = `${question}${fileContent ? `\n\nFile content:\n${fileContent}` : ""}`;
 
-    return res.status(200).json(response);
-  } catch (error) {
+    // Call Mistral API here with the prompt
+    const aiResponse = await callMistralAPI(prompt);
+
+    return res.status(200).json({ reply: aiResponse });
+  } catch (error: any) {
     console.error("API error:", error);
-    return res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: error.message || "Internal server error" });
   } finally {
     if (files) {
       const fileToClean = Array.isArray(files.file) ? files.file[0] : files.file;
       if (fileToClean && fileToClean.filepath) {
         try {
-          await fs.unlink(fileToClean.filepath).catch(() => {}); // Ignore cleanup errors
+          await fs.unlink(fileToClean.filepath).catch(() => {});
         } catch (cleanupError) {
           console.error("File cleanup error:", cleanupError);
         }
