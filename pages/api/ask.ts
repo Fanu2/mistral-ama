@@ -1,6 +1,6 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
-import { IncomingForm, File as FormidableFile } from 'formidable';
-import fs from 'fs';
+import type { NextApiRequest, NextApiResponse } from "next";
+import formidable, { File } from "formidable";
+import fs from "fs/promises";
 
 export const config = {
   api: {
@@ -9,68 +9,70 @@ export const config = {
 };
 
 type MistralMessage = {
-  role: 'user' | 'assistant';
+  role: string;
   content: string;
 };
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  const form = new IncomingForm();
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  const form = new formidable.IncomingForm();
 
-  form.parse(
-    req,
-    async (
-      err: Error | null,
-      fields: Record<string, string | string[]>,
-      files: Record<string, FormidableFile | FormidableFile[]>
-    ) => {
-      if (err) {
-        console.error('Form parsing error:', err);
-        return res.status(500).json({ error: 'Form parsing error' });
-      }
+  form.parse(req, async (err: any, fields: Record<string, any>, files: Record<string, File>) => {
+    if (err) {
+      console.error("Form parsing error:", err);
+      return res.status(500).json({ error: "Form parsing error" });
+    }
 
-      const questionConst = fields.question;
-      if (!questionConst || typeof questionConst !== 'string') {
-        return res.status(400).json({ error: 'Question must be a string' });
-      }
-      const question = questionConst;
+    const question = fields.question;
 
-      let fileContent = '';
-      const fileField = files.file;
+    if (!question || typeof question !== "string") {
+      return res.status(400).json({ error: "Missing or invalid 'question' field" });
+    }
 
-      if (fileField && !Array.isArray(fileField)) {
-        fileContent = fs.readFileSync(fileField.filepath, 'utf-8');
-      }
-
-      const prompt = fileContent
-        ? `User uploaded this file content:\n${fileContent}\n\nUser asked: ${question}`
-        : question;
-
+    let fileContent = "";
+    if (files.file) {
       try {
-        const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${process.env.MISTRAL_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model: 'mistral-medium',
-            messages: [{ role: 'user', content: prompt } as MistralMessage],
-          }),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Mistral API error: ${errorText}`);
-        }
-
-        const data = await response.json();
-        const reply = data.choices?.[0]?.message?.content;
-
-        res.status(200).json({ reply });
+        const file = Array.isArray(files.file) ? files.file[0] : files.file;
+        fileContent = await fs.readFile(file.filepath, "utf8");
       } catch (error) {
-        console.error('Mistral API call failed:', error);
-        res.status(500).json({ error: 'Failed to generate response from Mistral.' });
+        console.error("Error reading file:", error);
+        return res.status(500).json({ error: "Error reading uploaded file" });
       }
     }
-  );
+
+    // Build your prompt
+    const prompt = fileContent ? `File content:\n${fileContent}\n\nQuestion:\n${question}` : question;
+
+    try {
+      // Replace this with your actual Mistral API call
+      const response = await fetch("https://api.mistral.ai/v1/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.MISTRAL_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "mistral-7b-instruct",
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Mistral API error: ${errorText}`);
+      }
+
+      const data = await response.json();
+
+      // Assuming API response structure contains data.choices[0].message.content
+      const reply = data.choices?.[0]?.message?.content || "No response";
+
+      res.status(200).json({ reply });
+    } catch (error) {
+      console.error("Mistral API call error:", error);
+      res.status(500).json({ error: "Failed to get response from Mistral API" });
+    }
+  });
 }
