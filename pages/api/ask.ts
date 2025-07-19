@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import formidable, { File as FormidableFile } from "formidable";
+import formidable from "formidable";
+import type { Fields, Files } from "formidable";
 import fs from "fs";
-import path from "path";
 
 export const config = {
   api: {
@@ -10,8 +10,8 @@ export const config = {
 };
 
 type ParsedForm = {
-  fields: formidable.Fields;
-  files: formidable.Files;
+  fields: Fields;
+  files: Files;
 };
 
 function parseForm(req: NextApiRequest): Promise<ParsedForm> {
@@ -50,7 +50,6 @@ export default async function handler(
       fileContent = fs.readFileSync(filePath, "utf8");
     }
 
-    // Send request to Mistral API
     const mistralResponse = await fetch("https://api.mistral.ai/v1/chat/completions", {
       method: "POST",
       headers: {
