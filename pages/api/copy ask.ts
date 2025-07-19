@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { IncomingForm, Fields, Files } from 'formidable';
+import { IncomingForm } from 'formidable';
 import fs from 'fs';
 
 export const config = {
@@ -11,7 +11,7 @@ export const config = {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const form = new IncomingForm();
 
-  form.parse(req, async (err: Error | null, fields: Fields, files: Files) => {
+  form.parse(req, async (err, fields, files) => {
     if (err) {
       console.error('Form parsing error:', err);
       res.status(500).json({ error: 'Form parsing error' });
@@ -19,20 +19,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
+      // Ensure question is a string, not array
       const question = Array.isArray(fields.question) ? fields.question[0] : fields.question || '';
 
+      // Read file content if uploaded
       let fileContent = '';
       if (files.file && !Array.isArray(files.file)) {
         const uploadedFile = files.file;
         fileContent = fs.readFileSync(uploadedFile.filepath, 'utf-8');
       }
 
+      // Construct prompt content as a single string
       const contentToSend = fileContent
         ? `${question}\n\nAttached content:\n${fileContent}`
         : question;
 
       console.log('contentToSend:', contentToSend);
 
+      // Call Mistral API
       const mistralRes = await fetch('https://api.mistral.ai/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -44,7 +48,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           messages: [
             {
               role: 'user',
-              content: contentToSend,
+              content: contentToSend, // must be a string
             },
           ],
           temperature: 0.7,
@@ -52,6 +56,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
 
       if (!mistralRes.ok) {
+        // Extract error details if available
         const errorData = await mistralRes.json().catch(() => null);
         console.error('Mistral API error:', errorData || mistralRes.statusText);
         res.status(500).json({ error: `Mistral API error: ${JSON.stringify(errorData)}` });
