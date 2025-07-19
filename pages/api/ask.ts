@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { IncomingForm, type Fields, type Files } from 'formidable';
+import { IncomingForm } from 'formidable';
+import type { IncomingMessage } from 'http';
 import fs from 'fs';
 
 export const config = {
@@ -8,10 +9,19 @@ export const config = {
   },
 };
 
+// Define types manually (this avoids the "namespace" type error)
+type FormidableFields = {
+  [key: string]: string | string[];
+};
+
+type FormidableFiles = {
+  [key: string]: any;
+};
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const form = new IncomingForm();
 
-  form.parse(req, async (err: Error | null, fields: Fields, files: Files) => {
+  form.parse(req as IncomingMessage, async (err: Error | null, fields: FormidableFields, files: FormidableFiles) => {
     if (err) {
       console.error('Form parsing error:', err);
       res.status(500).json({ error: 'Form parsing error' });
@@ -30,8 +40,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const contentToSend = fileContent
         ? `${question}\n\nAttached content:\n${fileContent}`
         : question;
-
-      console.log('contentToSend:', contentToSend);
 
       const mistralRes = await fetch('https://api.mistral.ai/v1/chat/completions', {
         method: 'POST',
