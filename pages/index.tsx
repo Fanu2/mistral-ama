@@ -14,12 +14,12 @@ export default function Home() {
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
     if (!question.trim()) {
       setError("Question is required");
       return;
     }
 
-    // Optional: Client-side file size validation
     if (file && file.size > 5 * 1024 * 1024) {
       setError("File size must not exceed 5MB");
       return;
@@ -118,6 +118,7 @@ export default function Home() {
           {error}
         </p>
       )}
+
       {response && (
         <section
           style={{
@@ -127,7 +128,7 @@ export default function Home() {
             padding: "1rem",
             borderRadius: "6px",
           }}
-          aria-Live="polite"
+          aria-live="polite"
         >
           <strong style={{ display: "block", marginBottom: "0.5rem" }}>
             Response:
