@@ -1,7 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { promises as fs } from 'fs';
-import { parseForm } from '../../utils/parseForm'; // Ensure this exists and works
+import { parseForm } from '../../utils/parseForm';
 import type { File } from 'formidable';
+
+// Extend Formidable File to include `filepath`
+interface FormidableFile extends File {
+  filepath: string;
+}
 
 interface MistralResponse {
   choices?: Array<{
@@ -21,10 +26,10 @@ async function callMistralAPI(prompt: string): Promise<string> {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+      "Authorization": `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "mistral-tiny", // or mistral-small / mistral-medium based on your plan
+      model: "mistral-tiny",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.7,
       max_tokens: 2000,
@@ -46,7 +51,7 @@ export default async function handler(
   res: NextApiResponse<{ reply?: string; error?: string }>
 ) {
   if (req.method !== "POST") {
-    res.setHeader("Allow", ["POST"]);
+    res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: "Method Not Allowed" });
   }
 
@@ -66,7 +71,10 @@ export default async function handler(
       });
     }
 
-    const file = Array.isArray(files.file) ? files.file[0] : files.file;
+    const file = Array.isArray(files.file)
+      ? (files.file[0] as FormidableFile)
+      : (files.file as FormidableFile);
+
     let fileContent = "";
 
     if (file && file.size > 0) {
@@ -81,14 +89,15 @@ export default async function handler(
     return res.status(200).json({ reply: aiResponse });
   } catch (error: unknown) {
     console.error("API error:", error);
-    const errorMessage =
-      error instanceof Error ? error.message : "Internal server error";
+    const errorMessage = error instanceof Error ? error.message : "Internal server error";
     return res.status(500).json({ error: errorMessage });
   } finally {
     if (files?.file) {
-      const fileArray = Array.isArray(files.file) ? files.file : [files.file];
+      const fileArray = Array.isArray(files.file)
+        ? (files.file as FormidableFile[])
+        : [files.file as FormidableFile];
       await Promise.all(
-        fileArray.map(async (f: File) => {
+        fileArray.map(async (f) => {
           if (f.filepath) {
             try {
               await fs.unlink(f.filepath);
@@ -103,6 +112,7 @@ export default async function handler(
   }
 }
 
+// Required for file upload
 export const config = {
   api: {
     bodyParser: false,
