@@ -1,81 +1,86 @@
-import { useState, ChangeEvent, FormEvent } from "react";
+import type { NextApiRequest, NextApiResponse } from "next";
+import formidable, { File as FormidableFile } from "formidable";
+import fs from "fs";
+import path from "path";
 
-export default function Home() {
-  const [question, setQuestion] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [response, setResponse] = useState<string>("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
 
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
-    } else {
-      setFile(null);
+type ParsedForm = {
+  fields: formidable.Fields;
+  files: formidable.Files;
+};
+
+function parseForm(req: NextApiRequest): Promise<ParsedForm> {
+  const form = formidable({ multiples: false });
+
+  return new Promise((resolve, reject) => {
+    form.parse(req, (err, fields, files) => {
+      if (err) return reject(err);
+      resolve({ fields, files });
+    });
+  });
+}
+
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  try {
+    const { fields, files } = await parseForm(req);
+
+    const question = fields.question;
+    if (typeof question !== "string") {
+      return res.status(400).json({ error: "Question must be a string" });
     }
-  };
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    setResponse("");
-
-    try {
-      const formData = new FormData();
-      formData.append("question", question);
-      if (file) formData.append("file", file);
-
-      const res = await fetch("/api/ask", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const errData = await res.json();
-        setError(errData.error || "An error occurred");
-        setLoading(false);
-        return;
-      }
-
-      const data: { reply: string } = await res.json();
-      setResponse(data.reply);
-    } catch {
-      setError("Failed to fetch response");
-    } finally {
-      setLoading(false);
+    let fileContent = "";
+    if (files.file) {
+      const uploadedFile = Array.isArray(files.file)
+        ? files.file[0]
+        : files.file;
+      const filePath = uploadedFile.filepath;
+      fileContent = fs.readFileSync(filePath, "utf8");
     }
-  };
 
-  return (
-    <main style={{ maxWidth: 600, margin: "2rem auto", fontFamily: "Arial, sans-serif" }}>
-      <h1>Mistral AMA</h1>
-      <form onSubmit={handleSubmit}>
-        <label htmlFor="question">Your Question:</label>
-        <textarea
-          id="question"
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          rows={4}
-          style={{ width: "100%", marginBottom: 12 }}
-          required
-        />
+    // Send request to Mistral API
+    const mistralResponse = await fetch("https://api.mistral.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.MISTRAL_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "mistral-tiny",
+        messages: [
+          {
+            role: "user",
+            content: fileContent
+              ? `${question}\n\nFile content:\n${fileContent}`
+              : question,
+          },
+        ],
+      }),
+    });
 
-        <label htmlFor="file">Upload File (optional):</label>
-        <input id="file" type="file" onChange={handleFileChange} style={{ marginBottom: 12 }} />
+    if (!mistralResponse.ok) {
+      const errorData = await mistralResponse.json();
+      return res.status(500).json({ error: errorData.error || "Mistral API error" });
+    }
 
-        <button type="submit" disabled={loading}>
-          {loading ? "Processing..." : "Ask Mistral"}
-        </button>
-      </form>
+    const data = await mistralResponse.json();
+    const reply = data.choices?.[0]?.message?.content || "No reply from Mistral.";
 
-      {error && <p style={{ color: "red", marginTop: 12 }}>{error}</p>}
-      {response && (
-        <section style={{ marginTop: 20, whiteSpace: "pre-wrap", backgroundColor: "#f5f5f5", padding: 12, borderRadius: 6 }}>
-          <strong>Response:</strong>
-          <p>{response}</p>
-        </section>
-      )}
-    </main>
-  );
+    res.status(200).json({ reply });
+  } catch (error) {
+    console.error("Handler error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 }
