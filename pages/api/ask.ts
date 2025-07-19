@@ -1,42 +1,81 @@
-import type { NextApiRequest, NextApiResponse } from "next";
-import formidable from "formidable";
+import { useState, ChangeEvent, FormEvent } from "react";
 
-// Define your own minimal File type since formidable.File doesn't exist in typings
-type File = {
-  filepath: string;
-  originalFilename?: string;
-  mimetype?: string;
-  size?: number;
-};
+export default function Home() {
+  const [question, setQuestion] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [response, setResponse] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-// Define Fields and Files using your own File type
-type Fields = Record<string, string | string[] | undefined>;
-type Files = Record<string, File | File[]>;
-
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  const form = new formidable.IncomingForm();
-
-  form.parse(req, async (err, fields: Fields, files: Files) => {
-    if (err) {
-      console.error("Form parsing error:", err);
-      return res.status(500).json({ error: "Error parsing the form" });
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setFile(e.target.files[0]);
+    } else {
+      setFile(null);
     }
+  };
 
-    // You can now safely use fields and files with correct typings
-    console.log(fields);
-    console.log(files);
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setResponse("");
 
-    // Your logic here...
+    try {
+      const formData = new FormData();
+      formData.append("question", question);
+      if (file) formData.append("file", file);
 
-    res.status(200).json({ message: "Form parsed successfully", fields, files });
-  });
+      const res = await fetch("/api/ask", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        setError(errData.error || "An error occurred");
+        setLoading(false);
+        return;
+      }
+
+      const data: { reply: string } = await res.json();
+      setResponse(data.reply);
+    } catch {
+      setError("Failed to fetch response");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <main style={{ maxWidth: 600, margin: "2rem auto", fontFamily: "Arial, sans-serif" }}>
+      <h1>Mistral AMA</h1>
+      <form onSubmit={handleSubmit}>
+        <label htmlFor="question">Your Question:</label>
+        <textarea
+          id="question"
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          rows={4}
+          style={{ width: "100%", marginBottom: 12 }}
+          required
+        />
+
+        <label htmlFor="file">Upload File (optional):</label>
+        <input id="file" type="file" onChange={handleFileChange} style={{ marginBottom: 12 }} />
+
+        <button type="submit" disabled={loading}>
+          {loading ? "Processing..." : "Ask Mistral"}
+        </button>
+      </form>
+
+      {error && <p style={{ color: "red", marginTop: 12 }}>{error}</p>}
+      {response && (
+        <section style={{ marginTop: 20, whiteSpace: "pre-wrap", backgroundColor: "#f5f5f5", padding: 12, borderRadius: 6 }}>
+          <strong>Response:</strong>
+          <p>{response}</p>
+        </section>
+      )}
+    </main>
+  );
 }

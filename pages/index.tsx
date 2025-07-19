@@ -42,7 +42,7 @@ export default function Home() {
 
       const data: { reply: string } = await res.json();
       setResponse(data.reply);
-    } catch (err) {
+    } catch {
       setError("Failed to fetch response");
     } finally {
       setLoading(false);
@@ -64,7 +64,7 @@ export default function Home() {
         />
 
         <label htmlFor="file">Upload File (optional):</label>
-        <input id="file" type="file" onChange={handleFileChange} style={{ marginBottom: 12 }} />
+        <input id="file" name="file" type="file" onChange={handleFileChange} style={{ marginBottom: 12 }} />
 
         <button type="submit" disabled={loading}>
           {loading ? "Processing..." : "Ask Mistral"}
@@ -73,7 +73,15 @@ export default function Home() {
 
       {error && <p style={{ color: "red", marginTop: 12 }}>{error}</p>}
       {response && (
-        <section style={{ marginTop: 20, whiteSpace: "pre-wrap", backgroundColor: "#f5f5f5", padding: 12, borderRadius: 6 }}>
+        <section
+          style={{
+            marginTop: 20,
+            whiteSpace: "pre-wrap",
+            backgroundColor: "#f5f5f5",
+            padding: 12,
+            borderRadius: 6,
+          }}
+        >
           <strong>Response:</strong>
           <p>{response}</p>
         </section>
