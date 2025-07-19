@@ -8,11 +8,8 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
-    } else {
-      setFile(null);
-    }
+    const selectedFile = e.target.files?.[0] || null;
+    setFile(selectedFile);
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -34,15 +31,15 @@ export default function Home() {
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        setError(err.error || "An error occurred");
-        setLoading(false);
+        const errData = await res.json();
+        setError(errData.error || "An error occurred");
         return;
       }
 
       const data: { reply: string } = await res.json();
       setResponse(data.reply);
-    } catch {
+    } catch (err: unknown) {
+      console.error("Submission error:", err);
       setError("Failed to fetch response");
     } finally {
       setLoading(false);
@@ -64,7 +61,7 @@ export default function Home() {
         />
 
         <label htmlFor="file">Upload File (optional):</label>
-        <input id="file" name="file" type="file" onChange={handleFileChange} style={{ marginBottom: 12 }} />
+        <input id="file" type="file" onChange={handleFileChange} style={{ marginBottom: 12 }} />
 
         <button type="submit" disabled={loading}>
           {loading ? "Processing..." : "Ask Mistral"}
