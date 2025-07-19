@@ -1,7 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import formidable from "formidable";
+import formidable, { IncomingForm, File as FormidableFile } from "formidable";
 import fs from "fs";
-import { Readable } from "stream";
 
 // Disable Next.js default body parser
 export const config = {
@@ -10,12 +9,9 @@ export const config = {
   },
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ParsedForm = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  fields: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  files: any;
+  fields: Record<string, string>;
+  files: Record<string, FormidableFile | FormidableFile[]>;
 };
 
 async function parseForm(req: NextApiRequest): Promise<ParsedForm> {
@@ -42,18 +38,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: "Question is required" });
     }
 
-    const file = files.file?.[0] || files.file;
+    const file = Array.isArray(files.file) ? files.file[0] : files.file;
     let fileContent = "";
 
-    if (file && file.filepath) {
+    if (file && "filepath" in file) {
       fileContent = fs.readFileSync(file.filepath, "utf8");
     }
 
-    // This is where you'd use the question + fileContent with Mistral or other logic.
     const fakeAnswer = `Echo: ${question}${fileContent ? ` | File: ${fileContent.slice(0, 100)}...` : ""}`;
 
     res.status(200).json({ reply: fakeAnswer });
-  } catch (error: any) {
+  } catch (error) {
     console.error("API error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
