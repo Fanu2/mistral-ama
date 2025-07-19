@@ -33,15 +33,19 @@ async function parseForm(req: NextApiRequest): Promise<ParsedForm> {
   });
 
   return new Promise((resolve, reject) => {
-    form.parse(req, (err: Error | null, fields, files) => {
-      if (err) {
-        return reject(err);
+    form.parse(
+      req,
+      (
+        err: Error | null,
+        fields: Record<string, string | string[]>,
+        files: Record<string, FormidableFile | FormidableFile[]>
+      ) => {
+        if (err) {
+          return reject(err);
+        }
+        resolve({ fields, files });
       }
-      resolve({
-        fields: fields as Record<string, string | string[]>,
-        files: files as Record<string, FormidableFile | FormidableFile[]>,
-      });
-    });
+    );
   });
 }
 
