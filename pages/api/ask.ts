@@ -1,31 +1,47 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import formidable from "formidable";
+import fs from "fs/promises";
 
-type ParsedForm = {
-  fields: Record<string, string>;
-  files: Record<string, formidable.File | formidable.File[]>;
-};
-
+// Disable default body parser for file uploads
 export const config = {
   api: {
     bodyParser: false,
   },
 };
 
+// Define interface for formidable file
+interface FormidableFile {
+  filepath: string;
+  originalFilename?: string | null;
+  mimetype?: string | null;
+  size: number;
+}
+
+interface ParsedForm {
+  fields: Record<string, string | string[]>;
+  files: Record<string, FormidableFile | FormidableFile[]>;
+}
+
 async function parseForm(req: NextApiRequest): Promise<ParsedForm> {
-  const form = new formidable.IncomingForm();
+  const form = formidable({
+    multiples: true,
+    keepExtensions: true,
+    maxFileSize: 5 * 1024 * 1024, // 5MB limit
+    filter: ({ mimetype }: { mimetype: string | null }) => {
+      return !!mimetype && ["text/plain", "application/pdf"].includes(mimetype);
+    },
+  });
 
   return new Promise((resolve, reject) => {
-    form.parse(
-      req,
-      (err: Error | null, fields: formidable.Fields, files: formidable.Files) => {
-        if (err) return reject(err);
-        resolve({
-          fields: fields as Record<string, string>,
-          files: files as ParsedForm["files"],
-        });
+    form.parse(req, (err: Error | null, fields, files) => {
+      if (err) {
+        return reject(err);
       }
-    );
+      resolve({
+        fields: fields as Record<string, string | string[]>,
+        files: files as Record<string, FormidableFile | FormidableFile[]>,
+      });
+    });
   });
 }
 
@@ -34,25 +50,55 @@ export default async function handler(
   res: NextApiResponse
 ) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).json({ error: "Method Not Allowed" });
   }
 
+  let files: ParsedForm["files"] | null = null;
   try {
-    const { fields, files } = await parseForm(req);
-    const question = fields.question;
-    const file = files.file;
+    const { fields, files: parsedFiles } = await parseForm(req);
+    files = parsedFiles; // Store for cleanup
 
-    if (!question || question.trim() === "") {
-      return res.status(400).json({ error: "Question is required" });
+    const question = Array.isArray(fields.question)
+      ? fields.question[0]
+      : fields.question;
+
+    if (!question || typeof question !== "string" || question.length > 1000) {
+      return res.status(400).json({
+        error: "Question is required, must be a string, and cannot exceed 1000 characters",
+      });
     }
 
-    // Example: you can access file data here if needed
-    // Do your processing logic here...
+    const file = Array.isArray(files.file) ? files.file[0] : files.file;
+    let fileContent = "";
 
-    // Dummy response for example
-    res.status(200).json({ reply: `Received your question: ${question}` });
-  } catch (err) {
-    console.error("Error parsing form:", err);
-    res.status(500).json({ error: "Failed to process request" });
+    if (file && file.size > 0) {
+      try {
+        fileContent = await fs.readFile(file.filepath, "utf8");
+      } catch (readError) {
+        console.error("File read error:", readError);
+        return res.status(400).json({ error: "Failed to read uploaded file" });
+      }
+    }
+
+    const response = {
+      reply: `Echo: ${question}${fileContent ? ` | File: ${fileContent.slice(0, 100)}` : ""}`,
+      truncated: fileContent ? fileContent.length > 100 : false,
+    };
+
+    return res.status(200).json(response);
+  } catch (error) {
+    console.error("API error:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  } finally {
+    if (files) {
+      const fileToClean = Array.isArray(files.file) ? files.file[0] : files.file;
+      if (fileToClean && fileToClean.filepath) {
+        try {
+          await fs.unlink(fileToClean.filepath).catch(() => {}); // Ignore cleanup errors
+        } catch (cleanupError) {
+          console.error("File cleanup error:", cleanupError);
+        }
+      }
+    }
   }
 }
