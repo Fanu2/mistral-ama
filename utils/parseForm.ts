@@ -1,15 +1,19 @@
-import formidable from 'formidable';
+import formidable, { Fields, Files } from 'formidable';
 import type { NextApiRequest } from 'next';
 
-export function parseForm(req: NextApiRequest): Promise<{
-  fields: Record<string, string | string[]>;
-  files: Record<string, any>;
-}> {
+export const parseForm = (req: NextApiRequest): Promise<{ fields: Fields; files: Files }> => {
   const form = formidable({ multiples: false, keepExtensions: true });
+
   return new Promise((resolve, reject) => {
-    form.parse(req, (err, fields, files) => {
+    form.parse(req, (err: Error | null, fields: Fields, files: Files) => {
       if (err) reject(err);
       else resolve({ fields, files });
     });
   });
-}
+};
+
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
