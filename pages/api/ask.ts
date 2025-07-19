@@ -1,8 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import formidable, { IncomingForm, File as FormidableFile } from "formidable";
+import formidable from "formidable";
+import type { File as FormidableFile } from "formidable";
 import fs from "fs";
 
-// Disable Next.js default body parser
+// Disable body parsing to allow formidable to handle multipart/form-data
 export const config = {
   api: {
     bodyParser: false,
