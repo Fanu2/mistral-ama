@@ -24,12 +24,16 @@ interface ParsedForm {
 
 async function parseForm(req: NextApiRequest): Promise<ParsedForm> {
   const form = formidable({
-    multiples: true, // Allow multiple files
-    keepExtensions: true, // Preserve file extensions
+    multiples: true,
+    keepExtensions: true,
+    maxFileSize: 5 * 1024 * 1024, // 5MB limit
+    filter: ({ mimetype }) => {
+      return !!mimetype && ["text/plain", "application/pdf"].includes(mimetype);
+    },
   });
 
   return new Promise((resolve, reject) => {
-    form.parse(req, (err, fields, files) => {
+    form.parse(req, (err: Error | null, fields, files) => {
       if (err) {
         return reject(err);
       }
@@ -49,19 +53,21 @@ export default async function handler(
     return res.status(405).json({ error: "Method Not Allowed" });
   }
 
+  let files: ParsedForm["files"] | null = null;
   try {
-    const { fields, files } = await parseForm(req);
+    const { fields, files: parsedFiles } = await parseForm(req);
+    files = parsedFiles; // Store for cleanup
 
-    // Handle case where question might be an array
     const question = Array.isArray(fields.question)
       ? fields.question[0]
       : fields.question;
 
-    if (!question || typeof question !== "string") {
-      return res.status(400).json({ error: "Question is required and must be a string" });
+    if (!question || typeof question !== "string" || question.length > 1000) {
+      return res.status(400).json({
+        error: "Question is required, must be a string, and cannot exceed 1000 characters",
+      });
     }
 
-    // Handle file safely
     const file = Array.isArray(files.file) ? files.file[0] : files.file;
     let fileContent = "";
 
@@ -75,7 +81,8 @@ export default async function handler(
     }
 
     const response = {
-      reply: `Echo: ${question}${fileContent ? ` | File: ${fileContent.slice(0, 100)}${fileContent.length > 100 ? "..." : ""}` : ""}`,
+      reply: `Echo: ${question}${fileContent ? ` | File: ${fileContent.slice(0, 100)}` : ""}`,
+      truncated: fileContent ? fileContent.length > 100 : false,
     };
 
     return res.status(200).json(response);
@@ -83,14 +90,14 @@ export default async function handler(
     console.error("API error:", error);
     return res.status(500).json({ error: "Internal server error" });
   } finally {
-    // Clean up uploaded files
-    const { files } = await parseForm(req);
-    const file = Array.isArray(files.file) ? files.file[0] : files.file;
-    if (file && "filepath" in file) {
-      try {
-        await fs.unlink(file.filepath).catch(() => {}); // Ignore cleanup errors
-      } catch (cleanupError) {
-        console.error("File cleanup error:", cleanupError);
+    if (files) {
+      const file = Array.isArray(files.file) ? files.file[0] : files.file;
+      if (file && "filepath" in file) {
+        try {
+          await fs.unlink(file.filepath).catch(() => {}); // Ignore cleanup errors
+        } catch (cleanupError) {
+          console.error("File cleanup error:", cleanupError);
+        }
       }
     }
   }
