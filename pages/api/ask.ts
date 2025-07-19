@@ -1,6 +1,5 @@
 import formidable from 'formidable';
-import type { IncomingMessage } from 'http';
-import type { NextApiRequest } from 'next';
+import type { NextApiRequest, NextApiResponse } from 'next';
 
 type Fields = { [key: string]: string | string[] };
 type Files = { [key: string]: formidable.File | formidable.File[] };
@@ -21,12 +20,12 @@ function parseForm(req: NextApiRequest): Promise<{ fields: Fields; files: Files 
   });
 }
 
-export default async function handler(req: NextApiRequest, res: any) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     const { fields, files } = await parseForm(req);
-
     res.status(200).json({ success: true, fields, files });
-  } catch (error) {
+  } catch {
+    // Use _error to silence unused variable warning or omit the variable entirely
     res.status(500).json({ success: false, error: 'Failed to parse form data' });
   }
 }
