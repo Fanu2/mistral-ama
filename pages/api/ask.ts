@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { IncomingForm } from 'formidable';
+import { IncomingForm, File, Fields, Files } from 'formidable';
 import fs from 'fs';
 
 export const config = {
@@ -8,16 +8,12 @@ export const config = {
   },
 };
 
-type Fields = Record<string, string | string[]>;
-type Files = Record<
-  string,
-  {
-    filepath: string;
-    [key: string]: any;
-  }
->;
+type Data = {
+  reply?: string;
+  error?: string;
+};
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse<Data>) {
   const form = new IncomingForm();
 
   form.parse(req, async (err: Error | null, fields: Fields, files: Files) => {
@@ -28,20 +24,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-      const question = Array.isArray(fields.question) ? fields.question[0] : fields.question || '';
+      // Get question string from fields
+      const question = Array.isArray(fields.question)
+        ? fields.question[0]
+        : fields.question || '';
 
+      // Read uploaded file content if present
       let fileContent = '';
-      if (files.file && !Array.isArray(files.file)) {
-        const uploadedFile = files.file;
-        fileContent = fs.readFileSync(uploadedFile.filepath, 'utf-8');
+      const file = files.file as File | File[] | undefined;
+      if (file) {
+        // Handle single or multiple file uploads safely
+        if (Array.isArray(file)) {
+          // Just read the first file's content if multiple uploaded
+          fileContent = fs.readFileSync(file[0].filepath, 'utf-8');
+        } else {
+          fileContent = fs.readFileSync(file.filepath, 'utf-8');
+        }
       }
 
+      // Prepare the content to send in Mistral API
       const contentToSend = fileContent
         ? `${question}\n\nAttached content:\n${fileContent}`
         : question;
 
       console.log('contentToSend:', contentToSend);
 
+      // Call Mistral API
       const mistralRes = await fetch('https://api.mistral.ai/v1/chat/completions', {
         method: 'POST',
         headers: {
