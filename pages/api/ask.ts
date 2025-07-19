@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { IncomingForm, Fields, Files } from 'formidable';
 import fs from 'fs';
+import path from 'path';
 
 export const config = {
   api: {
@@ -8,67 +9,40 @@ export const config = {
   },
 };
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+const handler = (req: NextApiRequest, res: NextApiResponse) => {
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
   const form = new IncomingForm();
 
-  form.parse(req, async (err: any, fields: Fields, files: Files) => {
+  form.parse(req, async (err: Error | null, fields: Fields, files: Files) => {
     if (err) {
       console.error('Form parsing error:', err);
       res.status(500).json({ error: 'Form parsing error' });
       return;
     }
 
+    const contentField = fields.content;
+    const contentToSend = Array.isArray(contentField) ? contentField[0] : contentField;
+
+    if (typeof contentToSend !== 'string') {
+      res.status(400).json({ error: 'Invalid content format' });
+      return;
+    }
+
     try {
-      // Ensure question is a string, not array
-      const question = Array.isArray(fields.question) ? fields.question[0] : fields.question || '';
+      // You can add your logic here. Example:
+      console.log('Received content:', contentToSend);
 
-      // Read file content if uploaded
-      let fileContent = '';
-      if (files.file && !Array.isArray(files.file)) {
-        const uploadedFile = files.file;
-        fileContent = fs.readFileSync(uploadedFile.filepath, 'utf-8');
-      }
-
-      // Construct prompt content as a single string
-      const contentToSend = fileContent
-        ? `${question}\n\nAttached content:\n${fileContent}`
-        : question;
-
-      console.log('contentToSend:', contentToSend);
-
-      // Call Mistral API
-      const mistralRes = await fetch('https://api.mistral.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.MISTRAL_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'mistral-small',
-          messages: [
-            {
-              role: 'user',
-              content: contentToSend, // must be a string
-            },
-          ],
-          temperature: 0.7,
-        }),
-      });
-
-      if (!mistralRes.ok) {
-        const errorData = await mistralRes.json().catch(() => null);
-        console.error('Mistral API error:', errorData || mistralRes.statusText);
-        res.status(500).json({ error: `Mistral API error: ${JSON.stringify(errorData)}` });
-        return;
-      }
-
-      const result = await mistralRes.json();
-      const reply = result.choices?.[0]?.message?.content || 'No response from Mistral';
-
-      res.status(200).json({ reply });
-    } catch (error) {
-      console.error('Unexpected error:', error);
-      res.status(500).json({ error: 'Unexpected server error' });
+      // Respond back with a dummy response or integrate your model/API call
+      res.status(200).json({ answer: `You said: ${contentToSend}` });
+    } catch (processingError) {
+      console.error('Processing error:', processingError);
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
-}
+};
+
+export default handler;
