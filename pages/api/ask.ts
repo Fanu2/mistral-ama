@@ -1,79 +1,116 @@
+// pages/api/ask.ts
+
 import type { NextApiRequest, NextApiResponse } from "next";
-import formidable, { File } from "formidable";
-import fs from "fs/promises";
+import formidable, { File as FormidableFile } from "formidable";
+import { promises as fs } from "fs";
 
 export const config = {
   api: {
-    bodyParser: false,
+    bodyParser: false, // disable Next.js default body parser to use formidable
   },
+};
+
+// Define Mistral message structure (optional)
+type MistralMessage = {
+  role: "user" | "assistant" | "system";
+  content: string;
 };
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const form = new formidable.IncomingForm();
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
 
-  form.parse(
-    req,
-    async (
-      err: Error | null,
-      fields: Record<string, string | string[]>,
-      files: Record<string, File | File[]>
-    ) => {
-      if (err) {
-        console.error("Form parsing error:", err);
-        return res.status(500).json({ error: "Form parsing error" });
-      }
+  // Parse the incoming form data with formidable
+  const form = formidable({ multiples: true });
 
-      const question = fields.question;
+  form.parse(req, async (err, fields, files) => {
+    if (err) {
+      console.error("Form parsing error:", err);
+      return res.status(500).json({ error: "Error parsing form data" });
+    }
 
-      if (!question || typeof question !== "string") {
-        return res.status(400).json({ error: "Missing or invalid 'question' field" });
-      }
+    // Validate 'question' field
+    const question = fields.question;
+    if (typeof question !== "string" || question.trim() === "") {
+      return res
+        .status(400)
+        .json({ error: "Question field is required and must be a string" });
+    }
 
-      let fileContent = "";
-      if (files.file) {
-        try {
-          const file = Array.isArray(files.file) ? files.file[0] : files.file;
-          fileContent = await fs.readFile(file.filepath, "utf8");
-        } catch (error) {
-          console.error("Error reading file:", error);
-          return res.status(500).json({ error: "Error reading uploaded file" });
-        }
-      }
+    let fileContent = "";
 
-      const prompt = fileContent
-        ? `File content:\n${fileContent}\n\nQuestion:\n${question}`
-        : question;
-
+    if (files.file) {
       try {
-        const response = await fetch("https://api.mistral.ai/v1/completions", {
+        // files.file can be single or array
+        const file = Array.isArray(files.file) ? files.file[0] : files.file;
+
+        // Cast to FormidableFile and access filepath (for formidable v2+)
+        const filePath =
+          (file as FormidableFile).filepath ?? (file as any).path;
+
+        if (!filePath) {
+          return res
+            .status(400)
+            .json({ error: "Uploaded file path not found" });
+        }
+
+        fileContent = await fs.readFile(filePath, "utf8");
+      } catch (error) {
+        console.error("Error reading file:", error);
+        return res.status(500).json({ error: "Error reading uploaded file" });
+      }
+    }
+
+    // Construct prompt for Mistral AI
+    const prompt = fileContent
+      ? `File content:\n${fileContent}\n\nQuestion:\n${question}`
+      : question;
+
+    try {
+      // Call Mistral API
+      const apiKey = process.env.MISTRAL_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ error: "API key is not configured" });
+      }
+
+      const response = await fetch(
+        "https://api.mistral.ai/v1/models/mistral-7b-instruct-v0/chat/completions",
+        {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${process.env.MISTRAL_API_KEY}`,
+            Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify({
-            model: "mistral-7b-instruct",
             messages: [{ role: "user", content: prompt }],
           }),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Mistral API error: ${errorText}`);
         }
+      );
 
-        const data = await response.json();
-
-        const reply = data.choices?.[0]?.message?.content || "No response";
-
-        res.status(200).json({ reply });
-      } catch (error) {
-        console.error("Mistral API call error:", error);
-        res.status(500).json({ error: "Failed to get response from Mistral API" });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Mistral API responded with status ${response.status}: ${errorText}`
+        );
       }
+
+      const data = await response.json();
+
+      // Adjust based on Mistral API response structure
+      const reply = data.choices?.[0]?.message?.content;
+
+      if (!reply) {
+        return res.status(500).json({ error: "No reply from Mistral API" });
+      }
+
+      return res.status(200).json({ reply });
+    } catch (error) {
+      console.error("Error calling Mistral API:", error);
+      return res.status(500).json({ error: "Error calling Mistral API" });
     }
-  );
+  });
 }
