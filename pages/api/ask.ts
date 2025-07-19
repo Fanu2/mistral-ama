@@ -1,37 +1,3 @@
-import { NextApiRequest, NextApiResponse } from 'next';
-import { promises as fs } from 'fs';
-import { parseForm, ParsedForm } from './parseForm'; // Assuming you have a parseForm utility
-
-async function callMistralAPI(prompt: string): Promise<string> {
-  const apiKey = process.env.MISTRAL_API_KEY;
-  if (!apiKey) {
-    throw new Error("Missing MISTRAL_API_KEY in environment variables");
-  }
-
-  const response = await fetch("https://api.mistral.ai/v1/chat/completions", { // Updated endpoint
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "mistral-tiny", // or other model like mistral-small, mistral-medium
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.7,
-      max_tokens: 2000,
-      top_p: 1,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Mistral API error: ${response.status} - ${errorText}`);
-  }
-
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content || "No response from Mistral";
-}
-
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -71,11 +37,10 @@ export default async function handler(
 
     const aiResponse = await callMistralAPI(prompt);
     return res.status(200).json({ reply: aiResponse });
-  } catch (error: any) {
+  } catch (error) {
     console.error("API error:", error);
-    return res.status(500).json({
-      error: error.message || "Internal server error"
-    });
+    const errorMessage = error instanceof Error ? error.message : "Internal server error";
+    return res.status(500).json({ error: errorMessage });
   } finally {
     if (files) {
       const fileToClean = Array.isArray(files.file) ? files.file : [files.file].filter(Boolean);
@@ -93,9 +58,3 @@ export default async function handler(
     }
   }
 }
-
-export const config = {
-  api: {
-    bodyParser: false, // Required for file uploads
-  },
-};
