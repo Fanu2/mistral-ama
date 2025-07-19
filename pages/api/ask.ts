@@ -1,19 +1,25 @@
+import { NextApiRequest, NextApiResponse } from 'next';
+import { promises as fs } from 'fs';
+import { parseForm, ParsedForm } from './parseForm'; // Assuming you have a parseForm utility
+
 async function callMistralAPI(prompt: string): Promise<string> {
   const apiKey = process.env.MISTRAL_API_KEY;
   if (!apiKey) {
     throw new Error("Missing MISTRAL_API_KEY in environment variables");
   }
 
-  const response = await fetch("https://api.mistral.ai/v1/generate", {
+  const response = await fetch("https://api.mistral.ai/v1/chat/completions", { // Updated endpoint
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+      "Authorization": `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      // Adjust the payload as per Mistral API specs
-      prompt,
-      // Add other params like model, max_tokens, temperature etc if required
+      model: "mistral-tiny", // or other model like mistral-small, mistral-medium
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.7,
+      max_tokens: 2000,
+      top_p: 1,
     }),
   });
 
@@ -23,9 +29,7 @@ async function callMistralAPI(prompt: string): Promise<string> {
   }
 
   const data = await response.json();
-
-  // Adjust according to the actual response format
-  return data.generated_text || "No response from Mistral";
+  return data.choices?.[0]?.message?.content || "No response from Mistral";
 }
 
 export default async function handler(
@@ -33,6 +37,7 @@ export default async function handler(
   res: NextApiResponse
 ) {
   if (req.method !== "POST") {
+    res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: "Method Not Allowed" });
   }
 
@@ -56,28 +61,41 @@ export default async function handler(
     let fileContent = "";
 
     if (file && file.size > 0) {
+      if (file.size > 1024 * 1024) { // 1MB limit
+        return res.status(400).json({ error: "File size exceeds 1MB limit" });
+      }
       fileContent = await fs.readFile(file.filepath, "utf8");
     }
 
     const prompt = `${question}${fileContent ? `\n\nFile content:\n${fileContent}` : ""}`;
 
-    // Call Mistral API here with the prompt
     const aiResponse = await callMistralAPI(prompt);
-
     return res.status(200).json({ reply: aiResponse });
   } catch (error: any) {
     console.error("API error:", error);
-    return res.status(500).json({ error: error.message || "Internal server error" });
+    return res.status(500).json({
+      error: error.message || "Internal server error"
+    });
   } finally {
     if (files) {
-      const fileToClean = Array.isArray(files.file) ? files.file[0] : files.file;
-      if (fileToClean && fileToClean.filepath) {
-        try {
-          await fs.unlink(fileToClean.filepath).catch(() => {});
-        } catch (cleanupError) {
-          console.error("File cleanup error:", cleanupError);
-        }
-      }
+      const fileToClean = Array.isArray(files.file) ? files.file : [files.file].filter(Boolean);
+      await Promise.all(
+        fileToClean.map(async (f) => {
+          if (f?.filepath) {
+            try {
+              await fs.unlink(f.filepath);
+            } catch (cleanupError) {
+              console.error("File cleanup error:", cleanupError);
+            }
+          }
+        })
+      );
     }
   }
 }
+
+export const config = {
+  api: {
+    bodyParser: false, // Required for file uploads
+  },
+};
