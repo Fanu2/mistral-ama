@@ -1,16 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { IncomingForm } from 'formidable';
+import type { Fields, Files } from 'formidable';
 
 export const config = {
   api: {
     bodyParser: false,
   },
 };
-
-// ✅ Manual type definitions from Formidable
-import type { IncomingForm as FormidableIncomingForm } from 'formidable';
-type FormidableFields = Parameters<FormidableIncomingForm['parse']>[1];
-type FormidableFiles = Parameters<FormidableIncomingForm['parse']>[2];
 
 const handler = (req: NextApiRequest, res: NextApiResponse) => {
   if (req.method !== 'POST') {
@@ -20,7 +16,7 @@ const handler = (req: NextApiRequest, res: NextApiResponse) => {
 
   const form = new IncomingForm();
 
-  form.parse(req, async (err: Error | null, fields: ReturnType<NonNullable<FormidableFields>>, _files: ReturnType<NonNullable<FormidableFiles>>) => {
+  form.parse(req, async (err: Error | null, fields: Fields, _files: Files) => {
     if (err) {
       console.error('Form parsing error:', err);
       res.status(500).json({ error: 'Form parsing error' });
