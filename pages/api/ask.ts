@@ -1,23 +1,21 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { IncomingForm } from 'formidable';
-import type { Fields, Files } from 'formidable';
+import formidable, { IncomingForm } from 'formidable';
 
-// Disable Next.js default body parsing
+type Fields = { [key: string]: string | string[] };
+type Files = { [key: string]: any };
+
 export const config = {
   api: {
-    bodyParser: false,
+    bodyParser: false, // disable default body parser to handle formidable manually
   },
 };
 
-const handler = (req: NextApiRequest, res: NextApiResponse) => {
-  if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
-  }
-
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
   const form = new IncomingForm();
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   form.parse(req, async (err: Error | null, fields: Fields, _files: Files) => {
     if (err) {
       console.error('Form parsing error:', err);
@@ -25,22 +23,20 @@ const handler = (req: NextApiRequest, res: NextApiResponse) => {
       return;
     }
 
-    const contentField = fields.content;
-    const contentToSend = Array.isArray(contentField) ? contentField[0] : contentField;
-
-    if (typeof contentToSend !== 'string') {
-      res.status(400).json({ error: 'Invalid content format' });
-      return;
-    }
+    // Example: retrieve question field (adjust to your actual field names)
+    const question = Array.isArray(fields.question)
+      ? fields.question[0]
+      : fields.question || '';
 
     try {
-      console.log('Received content:', contentToSend);
-      res.status(200).json({ answer: `You said: ${contentToSend}` });
-    } catch (processingError) {
-      console.error('Processing error:', processingError);
+      // Your existing logic here — e.g., process question, call OpenAI, etc.
+      // For example:
+      const answer = `You asked: ${question}`;
+
+      res.status(200).json({ answer });
+    } catch (error) {
+      console.error('API handler error:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
-};
-
-export default handler;
+}
