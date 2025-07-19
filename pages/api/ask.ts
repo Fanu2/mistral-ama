@@ -1,12 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { promises as fs } from 'fs';
 import { parseForm } from '../../utils/parseForm';
-import type { File } from 'formidable';
-
-// Extend Formidable File to include `filepath`
-interface FormidableFile extends File {
-  filepath: string;
-}
+import type { File as FormidableFile } from 'formidable';
 
 interface MistralResponse {
   choices?: Array<{
@@ -51,11 +46,11 @@ export default async function handler(
   res: NextApiResponse<{ reply?: string; error?: string }>
 ) {
   if (req.method !== "POST") {
-    res.setHeader('Allow', ['POST']);
+    res.setHeader("Allow", ["POST"]);
     return res.status(405).json({ error: "Method Not Allowed" });
   }
 
-  let files: { file?: File | File[] } | null = null;
+  let files: { file?: FormidableFile | FormidableFile[] } | null = null;
 
   try {
     const { fields, files: parsedFiles } = await parseForm(req);
@@ -71,17 +66,20 @@ export default async function handler(
       });
     }
 
-    const file = Array.isArray(files.file)
-      ? (files.file[0] as FormidableFile)
-      : (files.file as FormidableFile);
-
+    let file: FormidableFile | undefined;
     let fileContent = "";
 
-    if (file && file.size > 0) {
-      if (file.size > 1024 * 1024) {
-        return res.status(400).json({ error: "File size exceeds 1MB limit" });
+    if (files?.file) {
+      file = Array.isArray(files.file)
+        ? (files.file[0] as FormidableFile)
+        : (files.file as FormidableFile);
+
+      if (file && file.size > 0) {
+        if (file.size > 1024 * 1024) {
+          return res.status(400).json({ error: "File size exceeds 1MB limit" });
+        }
+        fileContent = await fs.readFile(file.filepath, "utf8");
       }
-      fileContent = await fs.readFile(file.filepath, "utf8");
     }
 
     const prompt = `${question}${fileContent ? `\n\nFile content:\n${fileContent}` : ""}`;
@@ -93,11 +91,9 @@ export default async function handler(
     return res.status(500).json({ error: errorMessage });
   } finally {
     if (files?.file) {
-      const fileArray = Array.isArray(files.file)
-        ? (files.file as FormidableFile[])
-        : [files.file as FormidableFile];
+      const fileArray = Array.isArray(files.file) ? files.file : [files.file];
       await Promise.all(
-        fileArray.map(async (f) => {
+        fileArray.map(async (f: FormidableFile) => {
           if (f.filepath) {
             try {
               await fs.unlink(f.filepath);
@@ -112,7 +108,6 @@ export default async function handler(
   }
 }
 
-// Required for file upload
 export const config = {
   api: {
     bodyParser: false,
