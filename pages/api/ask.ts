@@ -1,22 +1,12 @@
-import formidable from 'formidable';
 import type { NextApiRequest, NextApiResponse } from 'next';
-
-// Define File type based on formidable file properties you may need
-type File = {
-  filepath: string;
-  originalFilename?: string;
-  mimetype?: string;
-  size?: number;
-  [key: string]: any; // allow additional properties
-};
+import formidable from 'formidable';
 
 type Fields = { [key: string]: string | string[] };
-type Files = { [key: string]: File | File[] };
+type Files = { [key: string]: formidable.File | formidable.File[] };
 
-// Disable Next.js built-in body parsing for this API route
 export const config = {
   api: {
-    bodyParser: false,
+    bodyParser: false, // disable Next.js default body parsing for formidable
   },
 };
 
@@ -35,7 +25,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const { fields, files } = await parseForm(req);
     res.status(200).json({ success: true, fields, files });
-  } catch (error) {
+  } catch (_error) {
+    // prefix _error to avoid unused variable warning
     res.status(500).json({ success: false, error: 'Failed to parse form data' });
   }
 }
