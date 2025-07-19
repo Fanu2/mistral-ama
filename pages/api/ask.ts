@@ -26,7 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const { fields, files } = await parseForm(req);
     res.status(200).json({ success: true, fields, files });
-  } catch {
-    res.status(500).json({ success: false, error: 'Failed to parse form data' });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Form parsing failed' });
   }
 }
