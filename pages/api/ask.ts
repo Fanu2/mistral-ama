@@ -1,9 +1,19 @@
 import formidable from 'formidable';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
-type Fields = { [key: string]: string | string[] };
-type Files = { [key: string]: formidable.File | formidable.File[] };
+// Define File type based on formidable file properties you may need
+type File = {
+  filepath: string;
+  originalFilename?: string;
+  mimetype?: string;
+  size?: number;
+  [key: string]: any; // allow additional properties
+};
 
+type Fields = { [key: string]: string | string[] };
+type Files = { [key: string]: File | File[] };
+
+// Disable Next.js built-in body parsing for this API route
 export const config = {
   api: {
     bodyParser: false,
@@ -12,6 +22,7 @@ export const config = {
 
 function parseForm(req: NextApiRequest): Promise<{ fields: Fields; files: Files }> {
   const form = formidable({ multiples: false, keepExtensions: true });
+
   return new Promise((resolve, reject) => {
     form.parse(req, (err: Error | null, fields: Fields, files: Files) => {
       if (err) reject(err);
@@ -24,8 +35,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const { fields, files } = await parseForm(req);
     res.status(200).json({ success: true, fields, files });
-  } catch {
-    // Use _error to silence unused variable warning or omit the variable entirely
+  } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to parse form data' });
   }
 }
