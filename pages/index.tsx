@@ -1,9 +1,9 @@
-import React, { useState, FormEvent, ChangeEvent } from "react";
+import { useState, ChangeEvent, FormEvent } from "react";
 
 export default function Home() {
   const [question, setQuestion] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [response, setResponse] = useState<string | null>(null);
+  const [response, setResponse] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -15,11 +15,11 @@ export default function Home() {
     }
   };
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    setResponse(null);
+    setResponse("");
 
     try {
       const formData = new FormData();
@@ -34,62 +34,47 @@ export default function Home() {
       });
 
       if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(errorText || "Failed to fetch response");
+        const err = await res.json();
+        setError(err.error || "An error occurred");
+        setLoading(false);
+        return;
       }
 
-      const data = await res.json();
-      setResponse(data.reply || "No reply received.");
+      const data: { reply: string } = await res.json();
+      setResponse(data.reply);
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("An unknown error occurred");
-      }
+      setError("Failed to fetch response");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main style={{ maxWidth: 600, margin: "2rem auto", padding: "0 1rem" }}>
+    <main style={{ maxWidth: 600, margin: "2rem auto", fontFamily: "Arial, sans-serif" }}>
       <h1>Mistral AMA</h1>
-
       <form onSubmit={handleSubmit}>
-        <label htmlFor="question">Question:</label>
+        <label htmlFor="question">Your Question:</label>
         <textarea
           id="question"
-          name="question"
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          required
           rows={4}
-          style={{ width: "100%", marginBottom: "1rem" }}
+          style={{ width: "100%", marginBottom: 12 }}
+          required
         />
 
-        <label htmlFor="file">Optional file upload:</label>
-        <input
-          id="file"
-          name="file"
-          type="file"
-          onChange={handleFileChange}
-          style={{ marginBottom: "1rem" }}
-        />
+        <label htmlFor="file">Upload File (optional):</label>
+        <input id="file" type="file" onChange={handleFileChange} style={{ marginBottom: 12 }} />
 
         <button type="submit" disabled={loading}>
-          {loading ? "Asking..." : "Ask"}
+          {loading ? "Processing..." : "Ask Mistral"}
         </button>
       </form>
 
-      {error && (
-        <p style={{ color: "red", marginTop: "1rem" }}>
-          Error: {error}
-        </p>
-      )}
-
+      {error && <p style={{ color: "red", marginTop: 12 }}>{error}</p>}
       {response && (
-        <section style={{ marginTop: "2rem" }}>
-          <h2>Response:</h2>
+        <section style={{ marginTop: 20, whiteSpace: "pre-wrap", backgroundColor: "#f5f5f5", padding: 12, borderRadius: 6 }}>
+          <strong>Response:</strong>
           <p>{response}</p>
         </section>
       )}

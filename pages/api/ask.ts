@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import formidable, { File as FormidableFile } from "formidable";
+import formidable, { File } from "formidable";
 import fs from "fs/promises";
 
 export const config = {
@@ -8,10 +8,9 @@ export const config = {
   },
 };
 
-type MistralApiResponse = {
-  results: Array<{
-    reply: string;
-  }>;
+type MistralMessage = {
+  role: string;
+  content: string;
 };
 
 export default async function handler(
@@ -20,72 +19,62 @@ export default async function handler(
 ) {
   const form = new formidable.IncomingForm();
 
-  form.parse(req, async (err, fields, files) => {
-    if (err) {
-      console.error("Form parsing error:", err);
-      return res.status(500).json({ error: "Error parsing the form" });
-    }
+  form.parse(
+    req,
+    async (err: Error | null, fields: formidable.Fields, files: formidable.Files) => {
+      if (err) {
+        console.error("Form parsing error:", err);
+        return res.status(500).json({ error: "Error parsing the form" });
+      }
 
-    const question = fields.question;
-    if (typeof question !== "string") {
-      return res.status(400).json({ error: "Question field is required" });
-    }
+      const question = fields.question;
+      if (!question || typeof question !== "string") {
+        return res.status(400).json({ error: "Missing or invalid 'question' field" });
+      }
 
-    let fileContent = "";
-
-    if (files.file) {
+      let fileContent = "";
       try {
         const file = Array.isArray(files.file) ? files.file[0] : files.file;
-
-        type FileWithPath = FormidableFile & { path?: string };
-
-        const fileTyped = file as FileWithPath;
-
-        const filePath = fileTyped.filepath ?? fileTyped.path;
-
-        if (!filePath) {
-          return res
-            .status(400)
-            .json({ error: "Uploaded file path not found" });
+        if (file && file.filepath) {
+          fileContent = await fs.readFile(file.filepath, "utf8");
         }
-
-        fileContent = await fs.readFile(filePath, "utf8");
       } catch (error) {
         console.error("Error reading file:", error);
         return res.status(500).json({ error: "Error reading uploaded file" });
       }
-    }
 
-    const prompt = `You are a helpful AI assistant. Based on the following input:\n\n${fileContent}\n\nUser question: ${question}`;
+      const prompt = `${fileContent}\n\nUser question: ${question}`;
 
-    try {
-      const response = await fetch("https://api.mistral.ai/v1/models/mistral-7b-instruct/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.MISTRAL_API_KEY}`,
-        },
-        body: JSON.stringify({
-          inputs: prompt,
-          parameters: {
-            max_new_tokens: 100,
+      try {
+        const response = await fetch("https://api.mistral.ai/v1/models/mistral-7b-instruct/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.MISTRAL_API_KEY}`,
           },
-        }),
-      });
+          body: JSON.stringify({
+            messages: [
+              {
+                role: "user",
+                content: prompt,
+              },
+            ],
+          }),
+        });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText);
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Mistral API error: ${errorText}`);
+        }
+
+        const data = await response.json();
+        const reply = data.choices?.[0]?.message?.content || "No reply from Mistral API";
+
+        return res.status(200).json({ reply });
+      } catch (error) {
+        console.error("Mistral API call error:", error);
+        return res.status(500).json({ error: "Failed to get response from Mistral API" });
       }
-
-      const data: MistralApiResponse = await response.json();
-
-      const reply = data.results?.[0]?.reply || "No reply from model.";
-
-      return res.status(200).json({ reply });
-    } catch (error) {
-      console.error("Error calling Mistral API:", error);
-      return res.status(500).json({ error: "Error generating response" });
     }
-  });
+  );
 }
