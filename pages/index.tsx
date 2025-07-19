@@ -19,6 +19,12 @@ export default function Home() {
       return;
     }
 
+    // Optional: Client-side file size validation
+    if (file && file.size > 5 * 1024 * 1024) {
+      setError("File size must not exceed 5MB");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setResponse("");
@@ -40,8 +46,10 @@ export default function Home() {
         throw new Error(errData.error || `HTTP error! status: ${res.status}`);
       }
 
-      const data: { reply: string } = await res.json();
-      setResponse(data.reply);
+      const data: { reply: string; truncated?: boolean } = await res.json();
+      setResponse(
+        data.truncated ? `${data.reply} (File content truncated)` : data.reply
+      );
     } catch (err: unknown) {
       console.error("Submission error:", err);
       setError(err instanceof Error ? err.message : "Failed to fetch response");
@@ -63,7 +71,7 @@ export default function Home() {
       <form onSubmit={handleSubmit} aria-busy={loading}>
         <div style={{ marginBottom: "1rem" }}>
           <label htmlFor="question" style={{ display: "block", marginBottom: "0.5rem" }}>
-            Your Question:
+            Your Question (max 1000 characters):
           </label>
           <textarea
             id="question"
@@ -72,6 +80,7 @@ export default function Home() {
             rows={4}
             style={{ width: "100%", marginBottom: "0.5rem", resize: "vertical" }}
             required
+            maxLength={1000}
             aria-invalid={error ? "true" : "false"}
             disabled={loading}
           />
@@ -79,11 +88,12 @@ export default function Home() {
 
         <div style={{ marginBottom: "1rem" }}>
           <label htmlFor="file" style={{ display: "block", marginBottom: "0.5rem" }}>
-            Upload File (optional):
+            Upload File (optional, .txt or .pdf, max 5MB):
           </label>
           <input
             id="file"
             type="file"
+            accept=".txt,.pdf"
             onChange={handleFileChange}
             style={{ marginBottom: "0.5rem" }}
             disabled={loading}
@@ -117,7 +127,7 @@ export default function Home() {
             padding: "1rem",
             borderRadius: "6px",
           }}
-          aria-live="polite"
+          aria-Live="polite"
         >
           <strong style={{ display: "block", marginBottom: "0.5rem" }}>
             Response:

@@ -27,7 +27,7 @@ async function parseForm(req: NextApiRequest): Promise<ParsedForm> {
     multiples: true,
     keepExtensions: true,
     maxFileSize: 5 * 1024 * 1024, // 5MB limit
-    filter: ({ mimetype }) => {
+    filter: ({ mimetype }: { mimetype: string | null }) => {
       return !!mimetype && ["text/plain", "application/pdf"].includes(mimetype);
     },
   });
